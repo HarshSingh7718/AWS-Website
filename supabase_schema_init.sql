@@ -65,6 +65,24 @@ CREATE INDEX IF NOT EXISTS idx_certificates_status ON public.certificates (statu
 CREATE INDEX IF NOT EXISTS idx_certificates_event ON public.certificates (event_id);
 CREATE INDEX IF NOT EXISTS idx_certificates_participant ON public.certificates (participant_id);
 
+-- One certificate per normalized email/device for each event occurrence.
+-- These indexes also prevent concurrent requests from bypassing the API lookup.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_certificates_email_event
+    ON public.certificates (
+        (LOWER(BTRIM(metadata ->> 'studentEmail'))),
+        (LOWER(BTRIM(event_title))),
+        event_date
+    )
+    WHERE NULLIF(BTRIM(metadata ->> 'studentEmail'), '') IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_certificates_device_event
+    ON public.certificates (
+        ((metadata ->> 'deviceId')),
+        (LOWER(BTRIM(event_title))),
+        event_date
+    )
+    WHERE NULLIF(BTRIM(metadata ->> 'deviceId'), '') IS NOT NULL;
+
 -- ── 4. Audit Logs Table ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

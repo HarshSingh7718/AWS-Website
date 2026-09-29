@@ -179,9 +179,8 @@ export interface CertificateVerificationResponse {
 
 export interface GenerateCertificateRequest {
   participantName: string;
-  participantEmail?: string;
-  eventTitle: string;
-  eventDate: string;
+  participantEmail: string;
+  eventId: string;
   achievementText?: string;
   signerName?: string;
   signerTitle?: string;
