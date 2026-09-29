@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { CERTIFICATE_EVENTS } from "@/config/certificate-events";
 import {
   Award,
   Check,
@@ -20,8 +21,7 @@ interface FormData {
   email: string;
   enrollmentNo: string;
   program: string;
-  eventTitle: string;
-  eventDate: string;
+  eventId: string;
 }
 
 const DEFAULT_FORM: FormData = {
@@ -29,8 +29,7 @@ const DEFAULT_FORM: FormData = {
   email: "",
   enrollmentNo: "",
   program: "",
-  eventTitle: "",
-  eventDate: new Date().toISOString().split("T")[0],
+  eventId: "",
 };
 
 const SAMPLE_DATA: FormData = {
@@ -38,18 +37,10 @@ const SAMPLE_DATA: FormData = {
   email: "piyush.rawat@tulas.edu.in",
   enrollmentNo: "202609018",
   program: "B.Tech",
-  eventTitle: "Cloud Kickstart 2026",
-  eventDate: new Date().toISOString().split("T")[0],
+  eventId: "cloud-kickstart-2026",
 };
 
 const PROGRAMS = ["B.Tech", "BCA", "MCA", "B.Sc", "BBA", "MBA", "Other"];
-
-const EVENT_PRESETS = [
-  "Cloud Kickstart 2026",
-  "AWS Immersion Day",
-  "GenAI Builder Workshop",
-  "Serverless Architecture Day",
-];
 
 export default function Home() {
   const [form, setForm] = useState<FormData>(DEFAULT_FORM);
@@ -84,8 +75,7 @@ export default function Home() {
     if (!form.email.trim()) return "College email ID is required.";
     if (!form.enrollmentNo.trim()) return "Enrollment number is required.";
     if (!form.program) return "Please select your course / academic program.";
-    if (!form.eventTitle.trim()) return "Event title is required.";
-    if (!form.eventDate) return "Event date is required.";
+    if (!form.eventId) return "Please select an event.";
     return null;
   };
 
@@ -99,6 +89,7 @@ export default function Home() {
 
     setIsSubmitting(true);
     setErrorMsg("");
+    setLastCertificateId(null);
 
     try {
       const response = await fetch("/api/certificate/generate", {
@@ -107,16 +98,37 @@ export default function Home() {
         body: JSON.stringify({
           participantName: form.name.trim(),
           participantEmail: form.email.trim(),
-          eventTitle: form.eventTitle.trim(),
-          eventDate: form.eventDate,
+          eventId: form.eventId,
           enrollmentNo: form.enrollmentNo.trim(),
           program: form.program,
         }),
       });
 
+      if (response.status === 409) {
+        const data = await response.json().catch(() => null);
+        const existingCertificateId: string | undefined =
+          data?.data?.certificateId;
+
+        setLastCertificateId(existingCertificateId || null);
+        setErrorMsg(
+          data?.error ||
+            "A certificate for this event has already been issued."
+        );
+        return;
+      }
+
       if (!response.ok) {
         const data = await response.json().catch(() => null);
-        throw new Error(data?.error || `Generation failed (${response.status})`);
+        const validationMessage = data?.data
+          ? Object.values(data.data).find(
+              (value): value is string => typeof value === "string"
+            )
+          : null;
+        throw new Error(
+          validationMessage ||
+            data?.error ||
+            `Generation failed (${response.status})`
+        );
       }
 
       const certificateId = response.headers.get("X-Certificate-Id");
@@ -485,76 +497,39 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Event Title */}
+            {/* Configured event */}
             <div className="att-field">
-              <label className="att-lbl" htmlFor="eventTitle">
-                Event title <span className="req">*</span>
-              </label>
-              <div className="att-input-wrap">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="3" y="4" width="18" height="18" rx="2" />
-                  <path d="M16 2v4M8 2v4M3 10h18" />
-                </svg>
-                <input
-                  id="eventTitle"
-                  type="text"
-                  required
-                  value={form.eventTitle}
-                  onChange={(e) => updateField("eventTitle", e.target.value)}
-                  placeholder="e.g. Cloud Kickstart 2026"
-                  className="att-input"
-                />
+              <div className="att-lbl" id="eventLabel">
+                Event <span className="req">*</span>
               </div>
-
-              {/* Event Presets */}
               <div className="att-pills !gap-2 mt-3">
-                {EVENT_PRESETS.map((preset) => (
-                  <label key={preset} className="att-pill att-preset-pill">
+                {CERTIFICATE_EVENTS.map((event) => (
+                  <label key={event.id} className="att-pill att-preset-pill">
                     <input
                       type="radio"
                       name="eventPreset"
-                      value={preset}
-                      checked={form.eventTitle === preset}
-                      onChange={() => updateField("eventTitle", preset)}
+                      value={event.id}
+                      checked={form.eventId === event.id}
+                      onChange={() => updateField("eventId", event.id)}
+                      required
                     />
-                    <span>{preset}</span>
+                    <span>{event.title}</span>
                   </label>
                 ))}
               </div>
             </div>
 
-            {/* Event Date */}
-            <div className="att-field">
-              <div className="flex items-center justify-between mb-2">
-                <label className="att-lbl !mb-0" htmlFor="eventDate">
-                  Event date <span className="req">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateField("eventDate", new Date().toISOString().split("T")[0])
-                  }
-                  className="text-[11.5px] text-[#6C63FF] hover:underline cursor-pointer font-medium font-mono"
-                >
-                  Set today
-                </button>
+            {form.eventId && (
+              <div className="att-field">
+                <div className="att-lbl">Event date</div>
+                <div className="att-input-no-icon att-event-date flex items-center">
+                  {CERTIFICATE_EVENTS.find((event) => event.id === form.eventId)?.date}
+                </div>
+                <p className="mt-2 text-[11px] text-[#8B8B96]">
+                  Certificates are available on the event day and the following day only.
+                </p>
               </div>
-              <input
-                id="eventDate"
-                type="date"
-                required
-                value={form.eventDate}
-                onChange={(e) => updateField("eventDate", e.target.value)}
-                className="att-input-no-icon"
-              />
-            </div>
+            )}
           </section>
 
           {/* Submit Button */}
@@ -575,9 +550,21 @@ export default function Home() {
 
           {/* Error Message */}
           {errorMsg && (
-            <p className="text-sm mt-3.5 leading-relaxed text-center text-[#F87171]">
-              {errorMsg}
-            </p>
+            <div className="mt-3.5 text-center">
+              <p className="text-sm leading-relaxed text-[#F87171]">
+                {errorMsg}
+              </p>
+              {lastCertificateId && (
+                <Link
+                  href={`/certificate/verify/${lastCertificateId}`}
+                  target="_blank"
+                  className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium text-[#6C63FF] hover:underline"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  View existing certificate →
+                </Link>
+              )}
+            </div>
           )}
         </form>
 

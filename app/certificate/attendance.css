@@ -158,6 +158,10 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
 }
 
+.att-event-date {
+  padding: 12px 16px !important;
+}
+
 .att-input::placeholder,
 .att-input-no-icon::placeholder {
   color: #5A5A65 !important;
